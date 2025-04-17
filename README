@@ -1,0 +1,798 @@
+# Lab: Quản lý trạng thái sử dụng InheritedWidget
+---
+**Mô tả:** Tạo một ứng dụng Flutter đơn giản để quản lý danh sách các mục với khả năng theo dõi trạng thái của chúng.
+
+**Biên soạn:** GVC.TS Trần Trung Chuyên
+**Ngày cập nhật:** 16/04/2025
+
+## Mục tiêu
+- Tạo một ứng dụng Flutter để quản lý danh sách các mục.
+- Cho phép người dùng chuyển đổi trạng thái theo dõi và điều hướng giữa danh sách mục và danh sách theo dõi bằng `BottomNavigationBar`.
+- Sử dụng `InheritedWidget` để quản lý trạng thái của các mục.
+- Hiển thị số lượng các mục đang được theo dõi bằng `Badge`.
+- Hiểu và áp dụng các khái niệm về `State Management` trong Flutter.
+- Vận dụng để làm các bài tập thực hành và dự án thực tế.
+
+## Điều kiện tiên quyết
+
+- Đã có kiến thức cơ bản về Flutter và Dart.
+
+## Các bước thực hiện
+
+### Bước 1: Thiết lập dự án
+
+1. Tạo một dự án Flutter mới:
+
+   ```bash
+   flutter create quan_ly_muc
+   cd quan_ly_muc
+   ```
+
+2. Mở dự án trong trình soạn thảo mã yêu thích.
+    ```bash
+    code .
+    ```
+
+### Bước 2: Tạo mô hình dữ liệu cho Item
+
+Tạo file `item_model.dart` để định nghĩa lớp `Item`.
+
+```dart
+class Item {
+  String name;
+  String value;
+  bool isMonitoring;
+
+  Item({required this.name, required this.value, this.isMonitoring = false});
+
+  Item copyWith({String? name, String? value, bool? isMonitoring}) {
+    return Item(
+      name: name ?? this.name,
+      value: value ?? this.value,
+      isMonitoring: isMonitoring ?? this.isMonitoring,
+    );
+  }
+}
+```
+
+### Bước 3: Tạo Item Monitor Provider
+
+Tạo file `item_monitor_provider.dart` để quản lý trạng thái bằng `InheritedWidget`.
+
+```dart
+import 'package:flutter/material.dart';
+import 'item_model.dart';
+
+class ItemMonitorProvider extends InheritedWidget {
+  final List<Item> items;
+  final List<Item> monitoringItem;
+  final void Function(Item item) toggleMonitoring;
+
+  const ItemMonitorProvider({
+    super.key,
+    required super.child,
+    required this.items,
+    required this.monitoringItem,
+    required this.toggleMonitoring,
+  });
+
+  static ItemMonitorProvider? of(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<ItemMonitorProvider>();
+  }
+
+  @override
+  bool updateShouldNotify(ItemMonitorProvider oldWidget) {
+    return items != oldWidget.items || monitoringItem != oldWidget.monitoringItem;
+  }
+}
+```
+
+### Bước 4: Tạo màn hình chính
+
+Tạo file `home_screen.dart` để thiết lập màn hình chính với `BottomNavigationBar` và `TabBarView`.
+
+```dart
+import 'package:flutter/material.dart';
+import 'item_list_screen.dart';
+import 'item_monitor_provider.dart';
+import 'item_monitoring_screen.dart';
+import 'item_model.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  int _selectedIndex = 0;
+  final List<Item> _items = [
+    Item(name: 'Mục 1', value: 'Giá trị 1'),
+    Item(name: 'Mục 2', value: 'Giá trị 2'),
+    Item(name: 'Mục 3', value: 'Giá trị 3'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      setState(() {
+        _selectedIndex = _tabController.index;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void toggleMonitoring(Item item) {
+    setState(() {
+      final index = _items.indexWhere((d) => d == item);
+      if (index != -1) {
+        _items[index] = _items[index].copyWith(
+          isMonitoring: !_items[index].isMonitoring,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final monitoredCount = _items.where((d) => d.isMonitoring).length;
+    return ItemMonitorProvider(
+      items: _items,
+      monitoringItem: _items.where((item) => item.isMonitoring).toList(),
+      toggleMonitoring: toggleMonitoring,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Ứng dụng của tôi')),
+        body: TabBarView(
+          controller: _tabController,
+          children: const [ItemListScreen(), ItemMonitoringScreen()],
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) {
+            setState(() {
+              _selectedIndex = index;
+              _tabController.animateTo(index);
+            });
+          },
+          type: BottomNavigationBarType.fixed,
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.devices),
+              label: 'Danh sách mục',
+            ),
+            BottomNavigationBarItem(
+              icon: monitoredCount > 0
+                  ? Badge.count(
+                      count: monitoredCount,
+                      child: const Icon(Icons.bar_chart),
+                    )
+                  : const Icon(Icons.bar_chart),
+              label: 'Theo dõi',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+### Bước 5: Tạo màn hình danh sách mục
+
+Tạo file `item_list_screen.dart` để hiển thị tất cả các mục.
+
+```dart
+import 'package:flutter/material.dart';
+import 'item_monitor_provider.dart';
+
+class ItemListScreen extends StatefulWidget {
+  const ItemListScreen({super.key});
+
+  @override
+  State<ItemListScreen> createState() => _ItemListScreenState();
+}
+
+class _ItemListScreenState extends State<ItemListScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final provider = ItemMonitorProvider.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Danh sách mục')),
+      body: ListView.builder(
+        itemCount: provider?.items.length ?? 0,
+        itemBuilder: (context, index) {
+          final item = provider!.items[index];
+          return ListTile(
+            title: Text(item.name),
+            trailing: Icon(
+              item.isMonitoring ? Icons.check_box : Icons.check_box_outline_blank,
+            ),
+            onTap: () => provider.toggleMonitoring(item),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+### Bước 6: Tạo màn hình theo dõi
+
+Tạo file `item_monitoring_screen.dart` để hiển thị các mục đang được theo dõi.
+
+```dart
+import 'package:flutter/material.dart';
+import 'item_monitor_provider.dart';
+
+class ItemMonitoringScreen extends StatefulWidget {
+  const ItemMonitoringScreen({super.key});
+
+  @override
+  State<ItemMonitoringScreen> createState() => _ItemMonitoringScreenState();
+}
+
+class _ItemMonitoringScreenState extends State<ItemMonitoringScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final provider = ItemMonitorProvider.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Theo dõi')),
+      body: ListView.builder(
+        itemCount: provider?.monitoringItem.length ?? 0,
+        itemBuilder: (context, index) {
+          final item = provider!.monitoringItem[index];
+          return ListTile(
+            title: Text(item.name),
+            trailing: Icon(
+              item.isMonitoring ? Icons.check_box : Icons.check_box_outline_blank,
+            ),
+            onTap: () => provider.toggleMonitoring(item),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+### Bước 7: Cập nhật file chính
+
+Cập nhật `main.dart` để thiết lập ứng dụng.
+
+```dart
+import 'package:flutter/material.dart';
+import 'home_screen.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Ứng dụng quản lý mục',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const HomeScreen(),
+    );
+  }
+}
+```
+
+### Bước 8: Chạy ứng dụng
+
+Chạy ứng dụng bằng lệnh:
+
+```bash
+flutter run
+```
+
+## Kết quả mong đợi
+
+- Một ứng dụng Flutter với hai tab: "Danh sách mục" và "Theo dõi".
+- Tab "Danh sách mục" hiển thị tất cả các mục với hộp kiểm để bật/tắt trạng thái theo dõi.
+- Tab "Theo dõi" chỉ hiển thị các mục đang được theo dõi.
+- Thanh điều hướng dưới cùng hiển thị huy hiệu với số lượng các mục đang được theo dõi.
+
+## Ghi chú
+
+- Kiểm tra ứng dụng trên trình giả lập hoặc thiết bị thực.
+- Xử lý các kiểm tra null để tránh lỗi runtime.
+
+## Bài tập thực hành
+
+### Nhận xét về mã nguồn
+
+Mã nguồn được cung cấp là một ứng dụng Flutter đơn giản, sử dụng các widget cơ bản để xây dựng giao diện người dùng với chức năng quản lý danh sách các mục (items) và theo dõi (monitoring) trạng thái của chúng. Dưới đây là các nhận xét chi tiết về mã nguồn:
+
+#### Ưu điểm:
+1. **Cấu trúc rõ ràng**:
+   - Ứng dụng sử dụng các widget Flutter cơ bản như `Scaffold`, `AppBar`, `BottomNavigationBar`, `TabBarView`, và `ListView.builder` để xây dựng giao diện.
+   - Sử dụng `InheritedWidget` (`ItemMonitorProvider`) để quản lý trạng thái và chia sẻ dữ liệu giữa các màn hình, phù hợp với ứng dụng nhỏ và giúp tránh việc sử dụng các thư viện quản lý trạng thái phức tạp hơn như Provider hay Riverpod.
+
+2. **Tái sử dụng và bảo trì**:
+   - Mã được chia thành các file riêng biệt (`home_screen.dart`, `item_list_screen.dart`, `item_monitoring_screen.dart`, `item_model.dart`, `item_monitor_provider.dart`), giúp dễ dàng bảo trì và mở rộng.
+   - Sử dụng mô hình `Item` với phương thức `copyWith` hỗ trợ việc tạo bản sao của đối tượng với các thuộc tính được cập nhật, tuân theo nguyên tắc bất biến (immutability).
+
+3. **Giao diện người dùng**:
+   - Ứng dụng có giao diện điều hướng dưới dạng `BottomNavigationBar` với hai tab: danh sách các mục (`ItemListScreen`) và danh sách các mục đang được theo dõi (`ItemMonitoringScreen`).
+   - Sử dụng `Badge.count` để hiển thị số lượng mục đang được theo dõi, tạo trải nghiệm trực quan cho người dùng.
+
+4. **Quản lý trạng thái**:
+   - Trạng thái của các mục (`isMonitoring`) được quản lý tập trung trong `HomeScreen` và truyền qua `ItemMonitorProvider`, đảm bảo tính nhất quán của dữ liệu giữa các màn hình.
+
+#### Nhược điểm:
+1. **Quản lý trạng thái hạn chế**:
+   - Việc sử dụng `InheritedWidget` phù hợp với ứng dụng nhỏ, nhưng nếu ứng dụng mở rộng, việc quản lý trạng thái có thể trở nên phức tạp. Các giải pháp như Provider, Riverpod, hoặc BLoC có thể phù hợp hơn cho các ứng dụng lớn hơn.
+   - `ItemMonitorProvider` không có cơ chế thông báo (notify) rõ ràng khi danh sách `items` hoặc `monitoringItem` thay đổi, có thể dẫn đến việc giao diện không được cập nhật đúng cách trong một số trường hợp.
+
+2. **Xử lý lỗi**:
+   - Mã không kiểm tra trường hợp `provider` hoặc `items` là `null` trong `ItemListScreen` và `ItemMonitoringScreen`. Điều này có thể gây ra lỗi runtime nếu `ItemMonitorProvider` không được thiết lập đúng.
+
+3. **Thiếu tính năng thực tế**:
+   - Danh sách `items` được khởi tạo cứng trong `HomeScreen` và không có cơ chế thêm, xóa, hoặc chỉnh sửa các mục. Điều này làm giảm tính thực tế của ứng dụng.
+   - Không có cơ chế lưu trữ dữ liệu (ví dụ: vào cơ sở dữ liệu hoặc SharedPreferences), nên dữ liệu sẽ bị mất khi ứng dụng khởi động lại.
+
+4. **Hiệu suất**:
+   - Việc lọc `monitoringItem` trong `HomeScreen` sử dụng `where` mỗi khi xây dựng lại widget có thể gây ra vấn đề hiệu suất nếu danh sách `items` lớn.
+   - `ListView.builder` không sử dụng `key` để tối ưu hóa việc tái sử dụng các widget con, có thể ảnh hưởng đến hiệu suất khi danh sách dài.
+
+5. **Thiếu kiểm tra đầu vào**:
+   - Hàm `toggleMonitoring` trong `HomeScreen` không kiểm tra trường hợp `item` không tồn tại trong danh sách `_items`, mặc dù điều này khó xảy ra trong mã hiện tại.
+
+#### Đề xuất cải thiện:
+1. **Cải thiện quản lý trạng thái**:
+   - Sử dụng một thư viện quản lý trạng thái như Provider hoặc Riverpod để dễ dàng mở rộng và bảo trì.
+   - Thêm cơ chế thông báo (`notifyListeners`) khi danh sách `items` hoặc `monitoringItem` thay đổi.
+
+2. **Xử lý lỗi**:
+   - Thêm kiểm tra `null` cho `provider` và `items` trong các màn hình để tránh lỗi runtime.
+   - Sử dụng `try-catch` hoặc các cơ chế xử lý lỗi khi thao tác với danh sách.
+
+3. **Thêm tính năng**:
+   - Thêm khả năng thêm, xóa, hoặc chỉnh sửa các mục thông qua giao diện người dùng.
+   - Tích hợp cơ sở dữ liệu hoặc SharedPreferences để lưu trữ dữ liệu lâu dài.
+
+4. **Tối ưu hóa hiệu suất**:
+   - Sử dụng `key` trong `ListView.builder` để tối ưu hóa việc tái sử dụng widget.
+   - Lưu trữ `monitoringItem` trong một biến trạng thái riêng để tránh lọc danh sách nhiều lần.
+
+5. **Cải thiện giao diện**:
+   - Thêm các hiệu ứng hoạt hình (animation) khi chuyển đổi giữa các tab hoặc khi bật/tắt trạng thái theo dõi.
+   - Tùy chỉnh giao diện với các chủ đề (theme) và màu sắc phù hợp hơn.
+
+---
+
+### Bài lab: Xây dựng ứng dụng quản lý danh sách mục với Flutter
+
+#### Mục tiêu
+Học viên sẽ học cách xây dựng một ứng dụng Flutter cơ bản với các tính năng quản lý danh sách mục, bao gồm:
+- Hiển thị danh sách các mục.
+- Chuyển đổi trạng thái theo dõi của các mục.
+- Điều hướng giữa các màn hình bằng `BottomNavigationBar`.
+- Sử dụng `InheritedWidget` để quản lý trạng thái.
+
+#### Yêu cầu
+1. Xây dựng ứng dụng Flutter với các màn hình:
+   - **Màn hình danh sách (ItemListScreen)**: Hiển thị tất cả các mục với khả năng bật/tắt trạng thái theo dõi.
+   - **Màn hình theo dõi (ItemMonitoringScreen)**: Hiển thị các mục đang được theo dõi.
+2. Sử dụng `BottomNavigationBar` để chuyển đổi giữa hai màn hình.
+3. Sử dụng `InheritedWidget` để quản lý trạng thái của danh sách các mục.
+4. Đảm bảo giao diện hiển thị số lượng mục đang được theo dõi bằng `Badge.count`.
+
+#### Hướng dẫn thực hiện
+
+
+
+# Hướng dẫn Lab: Xây dựng ứng dụng quản lý danh sách mục với Flutter
+
+## Mục tiêu
+
+Tạo một ứng dụng Flutter để quản lý danh sách các mục, cho phép người dùng chuyển đổi trạng thái theo dõi và điều hướng giữa danh sách mục và danh sách theo dõi bằng `BottomNavigationBar`.
+
+## Điều kiện tiên quyết
+
+- Flutter SDK đã được cài đặt.
+- Hiểu biết cơ bản về Dart và các widget Flutter.
+- Một trình soạn thảo mã (ví dụ: VS Code, Android Studio).
+
+## Các bước thực hiện
+
+### Bước 1: Thiết lập dự án
+
+1. Tạo một dự án Flutter mới:
+
+   ```bash
+   flutter create quan_ly_muc
+   cd quan_ly_muc
+   ```
+
+2. Mở dự án trong trình soạn thảo mã yêu thích.
+
+### Bước 2: Tạo mô hình Item
+
+Tạo file `item_model.dart` để định nghĩa lớp `Item`.
+
+```dart
+class Item {
+  String name;
+  String value;
+  bool isMonitoring;
+
+  Item({required this.name, required this.value, this.isMonitoring = false});
+
+  Item copyWith({String? name, String? value, bool? isMonitoring}) {
+    return Item(
+      name: name ?? this.name,
+      value: value ?? this.value,
+      isMonitoring: isMonitoring ?? this.isMonitoring,
+    );
+  }
+}
+```
+
+### Bước 3: Tạo Item Monitor Provider
+
+Tạo file `item_monitor_provider.dart` để quản lý trạng thái bằng `InheritedWidget`.
+
+```dart
+import 'package:flutter/material.dart';
+import 'item_model.dart';
+
+class ItemMonitorProvider extends InheritedWidget {
+  final List<Item> items;
+  final List<Item> monitoringItem;
+  final void Function(Item item) toggleMonitoring;
+
+  const ItemMonitorProvider({
+    super.key,
+    required super.child,
+    required this.items,
+    required this.monitoringItem,
+    required this.toggleMonitoring,
+  });
+
+  static ItemMonitorProvider? of(BuildContext context) {
+    return context.dependOnInheritedWidgetOfExactType<ItemMonitorProvider>();
+  }
+
+  @override
+  bool updateShouldNotify(ItemMonitorProvider oldWidget) {
+    return items != oldWidget.items || monitoringItem != oldWidget.monitoringItem;
+  }
+}
+```
+
+### Bước 4: Tạo màn hình chính
+
+Tạo file `home_screen.dart` để thiết lập màn hình chính với `BottomNavigationBar` và `TabBarView`.
+
+```dart
+import 'package:flutter/material.dart';
+import 'package:badge/badge.dart';
+import 'item_list_screen.dart';
+import 'item_monitor_provider.dart';
+import 'item_monitoring_screen.dart';
+import 'item_model.dart';
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  int _selectedIndex = 0;
+  final List<Item> _items = [
+    Item(name: 'Mục 1', value: 'Giá trị 1'),
+    Item(name: 'Mục 2', value: 'Giá trị 2'),
+    Item(name: 'Mục 3', value: 'Giá trị 3'),
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      setState(() {
+        _selectedIndex = _tabController.index;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  void toggleMonitoring(Item item) {
+    setState(() {
+      final index = _items.indexWhere((d) => d == item);
+      if (index != -1) {
+        _items[index] = _items[index].copyWith(
+          isMonitoring: !_items[index].isMonitoring,
+        );
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final monitoredCount = _items.where((d) => d.isMonitoring).length;
+    return ItemMonitorProvider(
+      items: _items,
+      monitoringItem: _items.where((item) => item.isMonitoring).toList(),
+      toggleMonitoring: toggleMonitoring,
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Ứng dụng của tôi')),
+        body: TabBarView(
+          controller: _tabController,
+          children: const [ItemListScreen(), ItemMonitoringScreen()],
+        ),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          onTap: (index) {
+            setState(() {
+              _selectedIndex = index;
+              _tabController.animateTo(index);
+            });
+          },
+          type: BottomNavigationBarType.fixed,
+          items: [
+            const BottomNavigationBarItem(
+              icon: Icon(Icons.devices),
+              label: 'Danh sách mục',
+            ),
+            BottomNavigationBarItem(
+              icon: monitoredCount > 0
+                  ? Badge.count(
+                      count: monitoredCount,
+                      child: const Icon(Icons.bar_chart),
+                    )
+                  : const Icon(Icons.bar_chart),
+              label: 'Theo dõi',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+```
+
+### Bước 5: Tạo màn hình danh sách mục
+
+Tạo file `item_list_screen.dart` để hiển thị tất cả các mục.
+
+```dart
+import 'package:flutter/material.dart';
+import 'item_monitor_provider.dart';
+
+class ItemListScreen extends StatefulWidget {
+  const ItemListScreen({super.key});
+
+  @override
+  State<ItemListScreen> createState() => _ItemListScreenState();
+}
+
+class _ItemListScreenState extends State<ItemListScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final provider = ItemMonitorProvider.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Danh sách mục')),
+      body: ListView.builder(
+        itemCount: provider?.items.length ?? 0,
+        itemBuilder: (context, index) {
+          final item = provider!.items[index];
+          return ListTile(
+            title: Text(item.name),
+            trailing: Icon(
+              item.isMonitoring ? Icons.check_box : Icons.check_box_outline_blank,
+            ),
+            onTap: () => provider.toggleMonitoring(item),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+### Bước 6: Tạo màn hình theo dõi
+
+Tạo file `item_monitoring_screen.dart` để hiển thị các mục đang được theo dõi.
+
+```dart
+import 'package:flutter/material.dart';
+import 'item_monitor_provider.dart';
+
+class ItemMonitoringScreen extends StatefulWidget {
+  const ItemMonitoringScreen({super.key});
+
+  @override
+  State<ItemMonitoringScreen> createState() => _ItemMonitoringScreenState();
+}
+
+class _ItemMonitoringScreenState extends State<ItemMonitoringScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final provider = ItemMonitorProvider.of(context);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Theo dõi')),
+      body: ListView.builder(
+        itemCount: provider?.monitoringItem.length ?? 0,
+        itemBuilder: (context, index) {
+          final item = provider!.monitoringItem[index];
+          return ListTile(
+            title: Text(item.name),
+            trailing: Icon(
+              item.isMonitoring ? Icons.check_box : Icons.check_box_outline_blank,
+            ),
+            onTap: () => provider.toggleMonitoring(item),
+          );
+        },
+      ),
+    );
+  }
+}
+```
+
+### Bước 7: Cập nhật file chính
+
+Cập nhật `main.dart` để thiết lập ứng dụng.
+
+```dart
+import 'package:flutter/material.dart';
+import 'home_screen.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Ứng dụng quản lý mục',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        useMaterial3: true,
+      ),
+      home: const HomeScreen(),
+    );
+  }
+}
+```
+
+### Bước 8: Chạy ứng dụng
+
+Chạy ứng dụng bằng lệnh:
+
+```bash
+flutter run
+```
+
+## Kết quả mong đợi
+
+- Một ứng dụng Flutter với hai tab: "Danh sách mục" và "Theo dõi".
+- Tab "Danh sách mục" hiển thị tất cả các mục với hộp kiểm để bật/tắt trạng thái theo dõi.
+- Tab "Theo dõi" chỉ hiển thị các mục đang được theo dõi.
+- Thanh điều hướng dưới cùng hiển thị huy hiệu với số lượng các mục đang được theo dõi.
+
+## Ghi chú
+
+- Đảm bảo gói `badge` đã được cài đặt.
+- Kiểm tra ứng dụng trên trình giả lập hoặc thiết bị thực.
+- Xử lý các kiểm tra null để tránh lỗi runtime.
+
+
+
+---
+
+### Bài tập thực hành
+
+#### Bài tập 1: Thêm tính năng thêm/xóa mục
+**Yêu cầu**:
+- Thêm nút "Thêm mục" vào `ItemListScreen` để cho phép người dùng thêm mục mới với `name` và `value`.
+- Thêm tùy chọn xóa mục trong `ItemListScreen` bằng cách vuốt (swipe) hoặc nhấn vào biểu tượng thùng rác.
+
+**Gợi ý**:
+- Sử dụng `TextField` trong một dialog để nhập `name` và `value` khi thêm mục.
+- Sử dụng widget `Dismissible` để hỗ trợ xóa mục bằng cách vuốt.
+- Cập nhật danh sách `_items` trong `HomeScreen` và đảm bảo `ItemMonitorProvider` phản ánh thay đổi.
+
+#### Bài tập 2: Lưu trữ dữ liệu lâu dài
+**Yêu cầu**:
+- Tích hợp `SharedPreferences` để lưu trữ danh sách `items` và trạng thái `isMonitoring` của chúng.
+- Khi ứng dụng khởi động lại, khôi phục danh sách `items` từ `SharedPreferences`.
+
+**Gợi ý**:
+- Sử dụng gói `shared_preferences` và thêm nó vào `pubspec.yaml`.
+- Chuyển đổi danh sách `items` thành JSON để lưu trữ và khôi phục.
+
+#### Bài tập 3: Tối ưu hóa hiệu suất
+**Yêu cầu**:
+- Tối ưu hóa `ListView.builder` bằng cách sử dụng `key` để tránh tái tạo widget không cần thiết.
+- Lưu trữ `monitoringItem` trong một biến trạng thái riêng thay vì lọc danh sách `_items` mỗi khi xây dựng lại giao diện.
+
+**Gợi ý**:
+- Sử dụng `ValueKey` trong `ListTile` để xác định các mục duy nhất.
+- Tạo biến `_monitoredItems` trong `HomeScreen` và cập nhật nó trong `toggleMonitoring`.
+
+#### Bài tập 4: Cải thiện giao diện
+**Yêu cầu**:
+- Thêm hoạt hình (animation) khi chuyển đổi giữa các tab trong `TabBarView`.
+- Tùy chỉnh giao diện với màu sắc và biểu tượng phù hợp hơn (ví dụ: sử dụng biểu tượng khác cho trạng thái `isMonitoring`).
+
+**Gợi ý**:
+- Sử dụng `AnimatedSwitcher` hoặc `PageTransitionSwitcher` cho hiệu ứng chuyển đổi.
+- Tùy chỉnh `ThemeData` trong `main.dart` để thay đổi màu sắc và kiểu dáng.
+
+#### Bài tập 5: Xử lý lỗi
+**Yêu cầu**:
+- Thêm kiểm tra `null` trong `ItemListScreen` và `ItemMonitoringScreen` để xử lý trường hợp `provider` hoặc `items` là `null`.
+- Hiển thị thông báo lỗi hoặc giao diện thay thế (ví dụ: "Không có mục nào") khi danh sách trống.
+
+**Gợi ý**:
+- Sử dụng toán tử `?.` hoặc điều kiện `if` để kiểm tra `null`.
+- Hiển thị `Center(child: Text('Không có mục nào'))` khi `items` hoặc `monitoringItem` trống.
+
+#### Bài tập 6: Làm việc với danh sách lớn
+**Yêu cầu**:
+- Tạo một danh sách lớn các mục (ví dụ: 1000 mục hoặc nhiều hơn) để kiểm tra hiệu suất của ứng dụng.
+- Sử dụng KeepAlive để giữ trạng thái của các tab khi chuyển đổi giữa chúng.
+
+#### Bài tập 7: Tích hợp giỏ hàng và tính tiền
+**Yêu cầu**:
+1. Mở rộng mô hình `Item` để bao gồm thuộc tính `price` (giá của mục).
+2. Thêm trạng thái `isInCart` để theo dõi các mục trong giỏ hàng.
+3. Tạo màn hình mới (`CartScreen`) để hiển thị danh sách các mục trong giỏ hàng, bao gồm:
+   - Tên, giá, và tùy chọn xóa mục.
+   - Tổng số tiền của tất cả các mục trong giỏ hàng.
+4. Cập nhật `ItemListScreen` để thêm nút "Thêm vào giỏ hàng" cho mỗi mục.
+5. Cập nhật `BottomNavigationBar` để thêm tab mới cho giỏ hàng (`CartScreen`).
+6. Đảm bảo trạng thái giỏ hàng được đồng bộ hóa qua `ItemMonitorProvider`.
+
+## Tiêu chí đánh giá
+- **Cơ bản**: Triển khai thành công màn hình giỏ hàng và chức năng thêm vào giỏ.
+- **Trung bình**: Đảm bảo tổng giá được cập nhật chính xác và huy hiệu giỏ hàng hoạt động như mong đợi.
+- **Nâng cao**: Thêm hoạt hình cho việc thêm/xóa mục khỏi giỏ và xử lý các trường hợp biên (ví dụ: giỏ trống, mục trùng lặp).
+
+---
+
+### Đánh giá mức độ hiểu và vận dụng
+1. **Hiểu lý thuyết**:
+   - Học viên có thể giải thích cách `InheritedWidget` hoạt động để chia sẻ trạng thái giữa các widget.
+   - Học viên hiểu cách sử dụng `TabController` và `BottomNavigationBar` để điều hướng.
+   - Học viên có thể giải thích cách mở rộng `InheritedWidget` để quản lý trạng thái giỏ hàng.
+
+2. **Vận dụng thực tế**:
+   - Hoàn thành bài lab cơ bản thể hiện khả năng xây dựng ứng dụng Flutter với các widget cơ bản và quản lý trạng thái đơn giản.
+   - Hoàn thành các bài tập 1-2 cho thấy khả năng tích hợp các tính năng thực tế như thêm/xóa mục và lưu trữ dữ liệu.
+   - Hoàn thành các bài tập 3-5 thể hiện khả năng tối ưu hóa mã, cải thiện giao diện, và xử lý lỗi, phù hợp với các dự án thực tế.
+   - Hoàn thành bài tập 7 cho thấy khả năng áp dụng các khái niệm vào kịch bản thực tế như giỏ hàng và tính tiền.
+
+3. **Đánh giá**:
+   - **Cơ bản**: Hoàn thành bài lab mà không có lỗi runtime và triển khai tab giỏ hàng cơ bản.
+   - **Trung bình**: Hoàn thành bài tập 1, 2, và 6, tích hợp thêm/xóa mục, lưu trữ dữ liệu, và tính năng giỏ hàng.
+   - **Nâng cao**: Hoàn thành tất cả các bài tập, tối ưu hóa hiệu suất, cải thiện giao diện, xử lý lỗi toàn diện, và thêm các tính năng bổ sung như xác nhận trước khi xóa mục khỏi giỏ.

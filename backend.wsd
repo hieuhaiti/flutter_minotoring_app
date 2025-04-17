@@ -1,0 +1,40 @@
+@startuml
+
+!define RECTANGLE class
+
+' Các lớp trong backend
+RECTANGLE Item {
+  +name: String
+  +value: String
+  +isMonitoring: bool
+  +copyWith(name: String, value: String, isMonitoring: bool): Item
+}
+
+RECTANGLE ItemMonitorProvider {
+  +items: List<Item>
+  +monitoringItem: List<Item>
+  +toggleMonitoring(item: Item)
+  +of(context: BuildContext): ItemMonitorProvider
+  +updateShouldNotify(oldWidget: ItemMonitorProvider): bool
+}
+
+RECTANGLE HomeScreen {
+  +initState()
+  +dispose()
+  +toggleMonitoring(item: Item)
+  +build(): Widget
+}
+
+RECTANGLE MyListItem {
+  +build(): Widget
+}
+
+' Các kết nối giữa các lớp
+ItemMonitorProvider -down-> Item : "Uses"
+HomeScreen -down-> ItemMonitorProvider : "Uses"
+HomeScreen -down-> MyListItem : "Contains"
+HomeScreen -down-> Item : "Manipulates"
+ItemMonitorProvider -down-> HomeScreen : "Notifies"
+ItemMonitorProvider -down-> MyListItem : "Interacts with"
+
+@enduml
